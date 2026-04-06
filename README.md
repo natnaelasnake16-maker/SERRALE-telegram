@@ -23,15 +23,15 @@ Canonical Serrale systems remain:
 ## Files That Matter
 
 - Telegram service migration:
-  - [`src/database/migrations.sql`](/Users/terusew/Downloads/serrale---professional-services-marketplace%20(1)/serrale-telegram/src/database/migrations.sql)
-- Canonical shared DB migration inside the main repo:
-  - [`migrations/migrations/20260405_001_telegram_identity_layer.sql`](/Users/terusew/Downloads/serrale---professional-services-marketplace%20(1)/migrations/migrations/20260405_001_telegram_identity_layer.sql)
+  - `src/database/migrations.sql`
+- Standalone copy of the production-safe migration for this repo:
+  - `20260405_001_telegram_identity_layer.sql`
 - Telegram entrypoint:
-  - [`src/index.ts`](/Users/terusew/Downloads/serrale---professional-services-marketplace%20(1)/serrale-telegram/src/index.ts)
+  - `src/index.ts`
 - Mini App HTTP routes:
-  - [`src/http/routes/mini-app.ts`](/Users/terusew/Downloads/serrale---professional-services-marketplace%20(1)/serrale-telegram/src/http/routes/mini-app.ts)
+  - `src/http/routes/mini-app.ts`
 - Mini App static UI:
-  - [`src/mini-app/index.html`](/Users/terusew/Downloads/serrale---professional-services-marketplace%20(1)/serrale-telegram/src/mini-app/index.html)
+  - `src/mini-app/index.html`
 
 ## Exact Environment Variables
 
@@ -64,11 +64,11 @@ Notes:
 
 ## Database Changes To Apply
 
-Run only one canonical migration for production. Use the root migration in the main Serrale repo:
+Run only one canonical migration for production. If you are deploying from this standalone Telegram repo, use:
 
 ```sql
 -- Apply this file in Supabase SQL Editor:
--- migrations/migrations/20260405_001_telegram_identity_layer.sql
+-- 20260405_001_telegram_identity_layer.sql
 ```
 
 It adds or maintains:
