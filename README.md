@@ -111,13 +111,25 @@ For a manual Render service, use:
 - Build command:
 
 ```bash
-cd serrale-telegram && npm install && npm run build
+npm install
 ```
 
 - Start command:
 
 ```bash
-cd serrale-telegram && npm start
+node dist/index.js
+```
+
+Why `npm install` is enough here:
+
+- this repo now runs `postinstall`
+- `postinstall` executes `npm run build`
+- that guarantees `dist/index.js` exists before Render starts the service
+
+If you prefer to be explicit in Render, this also works:
+
+```bash
+npm install && npm run build
 ```
 
 Health check:
