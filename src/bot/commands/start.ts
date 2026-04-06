@@ -1,6 +1,6 @@
 import type { Telegraf } from 'telegraf';
-import { formatClientWebHandoff, formatJobDetail, formatWelcomeMessage } from '../../utils/formatters';
-import { jobDetailKeyboard, mainMenuKeyboard } from '../../utils/keyboards';
+import { formatClientWebHandoff, formatJobStartSummary, formatWelcomeMessage } from '../../utils/formatters';
+import { jobStartKeyboard, mainMenuKeyboard } from '../../utils/keyboards';
 import type { SerraleBotContext } from '../../types';
 import { JobService } from '../../services/job.service';
 import { UserService } from '../../services/user.service';
@@ -31,26 +31,11 @@ export function registerStartCommand(bot: Telegraf<SerraleBotContext>) {
             const prefix = payload.startsWith('apply_') ? 'apply_' : 'job_';
             const jobId = payload.slice(prefix.length);
 
-            if (!status.profile_id) {
-                await beginOnboarding(ctx, { pendingJobId: jobId });
-                return;
-            }
-            if (status.role === 'client') {
-                await ctx.reply(
-                    formatClientWebHandoff(),
-                    mainMenuKeyboard({ linked: status.linked, isAdmin, role: status.role })
-                );
-                return;
-            }
-
             const job = await JobService.getJobById(jobId, status.profile_id);
             if (job) {
                 await ctx.reply(
-                    formatJobDetail(job, {
-                        linked: status.linked,
-                        saved: Boolean(job.saved),
-                    }),
-                    jobDetailKeyboard({ jobId: job.id, page: 1, linked: status.linked, saved: Boolean(job.saved) })
+                    formatJobStartSummary(job, status),
+                    jobStartKeyboard({ jobId: job.id, linked: status.linked, saved: Boolean(job.saved) })
                 );
                 return;
             }
@@ -58,7 +43,7 @@ export function registerStartCommand(bot: Telegraf<SerraleBotContext>) {
 
         await ctx.reply(
             formatWelcomeMessage(status),
-            mainMenuKeyboard({ linked: status.linked, isAdmin, role: status.role })
+            mainMenuKeyboard({ linked: status.linked, isAdmin, role: status.role, state: status.state })
         );
     });
 }

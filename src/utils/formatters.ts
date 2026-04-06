@@ -19,14 +19,23 @@ function roleLabel(role: TelegramLinkStatus['role']) {
     if (role === 'service_provider') return 'Service Provider';
     if (role === 'client') return 'Client';
     if (role === 'admin') return 'Admin';
-    return 'Not set';
+    return 'Not linked';
 }
 
 function trustLabel(trustLevel: TelegramLinkStatus['trust_level']) {
-    if (trustLevel === 'level_3') return 'Level 3 Trusted';
-    if (trustLevel === 'level_2') return 'Level 2 Verified';
-    if (trustLevel === 'level_1') return 'Level 1 Default';
+    if (trustLevel === 'level_3') return 'Trusted';
+    if (trustLevel === 'level_2') return 'Verified';
+    if (trustLevel === 'level_1') return 'Pending';
     return 'Not issued';
+}
+
+function relativeTime(timestamp?: string | null) {
+    if (!timestamp) return 'Recently';
+    const diffMs = Date.now() - new Date(timestamp).getTime();
+    const diffHours = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60)));
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
 }
 
 function formatRoleRegistration(role: TelegramProfileRole | 'admin' | null, category: string | null, userLevel: string | null) {
@@ -35,27 +44,27 @@ function formatRoleRegistration(role: TelegramProfileRole | 'admin' | null, cate
             ? userLevel.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
             : 'Junior';
 
-        return `You are registered as a ${levelLabel} Service Provider${category ? ` in the ${category} category.` : '.'}`;
+        return `Registered as a ${levelLabel} Service Provider${category ? ` in ${category}.` : '.'}`;
     }
 
     if (role === 'client') {
-        return `You are registered as a Client${category ? ` in the ${category} category.` : '.'}`;
+        return `Registered as a Client${category ? ` in ${category}.` : '.'}`;
     }
 
     if (role === 'admin') {
-        return 'You are registered as an Admin account.';
+        return 'Registered as an Admin account.';
     }
 
-    return 'Your Serrale identity is being prepared.';
+    return 'Your Serrale identity is not linked yet.';
 }
 
 export function formatWelcomeMessage(status: TelegramLinkStatus) {
     if (!status.linked) {
         return [
-            'Serrale on Telegram',
+            'Welcome to Serrale.',
             '',
-            'Your Telegram account is captured, but your Serrale identity is not complete yet.',
-            'Tap Verify Identity to answer 4 quick questions before you browse jobs or apply from Telegram.',
+            'Telegram is connected. Your Serrale account is not linked yet.',
+            'You can browse jobs now, or link your Serrale account to save jobs and get stronger recommendations.',
         ].join('\n');
     }
 
@@ -66,7 +75,7 @@ export function formatWelcomeMessage(status: TelegramLinkStatus) {
         `${roleLabel(status.role)}${status.main_skill_category ? ` · ${status.main_skill_category}` : ''}`,
         `${status.city || 'Location pending'} · ${trustLabel(status.trust_level)}`,
         '',
-        'Use the menu below to browse jobs, save opportunities, and manage your Telegram access.',
+        'Use the menu below to browse jobs, save openings, and apply through the compact Telegram flow.',
     ].join('\n');
 }
 
@@ -74,16 +83,15 @@ export function formatStatusMessage(status: TelegramLinkStatus) {
     return [
         'Telegram account status',
         '',
-        `Serrale ID: ${status.serrale_id || 'Not issued yet'}`,
-        `Linked: ${status.linked ? 'Yes' : 'No'}`,
+        `Telegram: Connected`,
+        `Serrale account: ${status.linked ? 'Linked' : 'Not linked'}`,
         `Role: ${roleLabel(status.role)}`,
-        `City: ${status.city || 'Not provided yet'}`,
-        `Category: ${status.main_skill_category || 'Not selected yet'}`,
-        `Trust: ${trustLabel(status.trust_level)}`,
-        `Profile complete: ${Math.max(0, status.profile_completion || 0)}%`,
+        `Verification: ${trustLabel(status.trust_level)}`,
         `Saved jobs: ${status.saved_jobs_count}`,
-        `Intake: ${status.intake_status || 'None'}`,
-        `Name: ${status.full_name || 'Unknown'}`,
+        `Applications: ${status.application_count}`,
+        `Last application: ${status.last_application_at ? relativeTime(status.last_application_at) : 'None yet'}`,
+        `Intake: ${status.intake_status || 'Not needed'}`,
+        `Profile completion: ${Math.max(0, status.profile_completion || 0)}%`,
     ].join('\n');
 }
 
@@ -91,34 +99,40 @@ export function formatHelpMessage() {
     return [
         'Serrale Telegram commands',
         '',
-        '/start - open the Serrale Telegram home',
-        '/status - view your Serrale Telegram identity status',
+        '/start - open Serrale on Telegram',
+        '/status - view your link and application status',
+        '/jobs - browse open jobs',
+        '/saved - view saved jobs',
         '/help - show this help message',
         '/listjobs - admin publish queue',
-        '/postjob <jobId> - publish a Serrale job to the jobs channel',
-        '/closejob <jobId> - close a published job and update the channel post',
+        '/postjob <jobId> - publish to the Serrale jobs channel',
+        '/closejob <jobId> - close a published channel job',
+        '/applications <jobId> - list Telegram applications for a job',
+        '/applicant <applicationId> - inspect one Telegram application',
+        '/markreviewed <applicationId> - mark an application as reviewed',
         '',
-        'Identity verification runs in the private bot before browsing or applying from Telegram.',
+        'Use View Details to open the compact Mini App card and Apply to send a lightweight Telegram application with your CV.',
     ].join('\n');
 }
 
-export function formatJobList(jobs: JobSummary[], page: number, query?: string) {
+export function formatJobList(jobs: JobSummary[], page: number, query?: string, filterLabel?: string) {
     if (jobs.length === 0) {
         return query
             ? `No open jobs matched "${query}" on page ${page}.`
-            : `No open jobs found on page ${page}.`;
+            : `No open jobs found${filterLabel ? ` for ${filterLabel}` : ''} on page ${page}.`;
     }
 
     const lines = jobs.map((job, index) => {
         return [
             `${index + 1}. ${job.title}`,
-            `   ${job.category || 'General'} | ${job.city || job.location_type || 'Remote/Open'} | ${formatBudget(job)}`,
+            `   ${job.category || 'General'} · ${job.city || job.location_type || 'Remote/Open'} · ${formatBudget(job)}`,
+            `   ${job.description?.slice(0, 80) || 'Open Serrale to read the full brief.'}`,
         ].join('\n');
     });
 
     return [
         query ? `Open Serrale jobs for "${query}"` : 'Open Serrale jobs',
-        `Page ${page}`,
+        `${filterLabel ? `Filter: ${filterLabel}` : 'Filter: All'} · Page ${page}`,
         '',
         ...lines,
     ].join('\n');
@@ -128,19 +142,37 @@ export function formatJobDetail(job: JobSummary, options: { linked: boolean; sav
     return [
         job.title,
         '',
-        `Category: ${job.category || 'General'}`,
+        `${job.category || 'General'}${job.sub_category ? ` · ${job.sub_category}` : ''}`,
+        `Posted: ${relativeTime(job.created_at)}`,
         `Location: ${job.city || job.location_type || 'Remote/Open'}`,
+        `Job type: ${job.job_type || 'Project'}`,
         `Budget: ${formatBudget(job)}`,
-        `Type: ${job.job_type || 'Project'}`,
-        `Duration: ${job.duration || 'Not specified'}`,
         `Experience: ${job.experience_level || 'Not specified'}`,
+        `Deadline: ${job.deadline || 'Open'}`,
+        job.client_verified ? 'Client: Verified' : 'Client: Standard',
         '',
-        job.description?.slice(0, 700) || 'No description available yet.',
+        (job.description || 'Open the full job card to read more.').slice(0, 420),
         '',
         options.linked
-            ? `Saved on Telegram: ${options.saved ? 'Yes' : 'No'}`
-            : 'Complete identity verification in Telegram before you apply or save jobs here.',
+            ? `Saved: ${options.saved ? 'Yes' : 'No'}`
+            : 'Link your Serrale account to save this job.',
         `Open on Serrale: ${config.serraleWebUrl}/job/${job.id}`,
+    ].join('\n');
+}
+
+export function formatJobStartSummary(job: JobSummary, status: TelegramLinkStatus) {
+    return [
+        'Welcome to Serrale.',
+        '',
+        job.title,
+        `${job.category || 'General'} · ${job.city || job.location_type || 'Remote/Open'}`,
+        `${formatBudget(job)} · ${job.experience_level || 'Open level'}`,
+        '',
+        (job.description || 'Open the full job card to continue.').slice(0, 160),
+        '',
+        status.linked
+            ? 'You can view the compact job card, save this job, or apply now.'
+            : 'You can view the compact job card now. Link your Serrale account to save jobs.',
     ].join('\n');
 }
 
@@ -148,8 +180,7 @@ export function formatIdentityWelcome() {
     return [
         'Welcome to Serrale.',
         '',
-        'Before you can apply for opportunities or browse projects,',
-        'we need to confirm a few things. It takes 60 seconds.',
+        'If you want a fuller Serrale profile inside Telegram, answer a few quick setup questions.',
         '',
         'What is your full name?',
     ].join('\n');
@@ -187,7 +218,7 @@ export function formatIdentityCompleted(status: TelegramLinkStatus) {
         '',
         formatRoleRegistration(status.role, status.main_skill_category, status.user_level),
         '',
-        `Your profile is ${Math.max(40, status.profile_completion || 40)}% complete. The more you add, the better your recommendations will be.`,
+        `Your profile is ${Math.max(40, status.profile_completion || 40)}% complete.`,
     ].join('\n');
 }
 
@@ -195,22 +226,34 @@ export function formatClientWebHandoff() {
     return [
         'Your Serrale identity is ready.',
         '',
-        'Client project posting stays on the Serrale web app in phase 1.',
-        'Use Open Serrale App or Complete Profile to continue there.',
+        'Client posting and deeper hiring workflows stay on the Serrale web app in this phase.',
+    ].join('\n');
+}
+
+export function formatLinkPrompt() {
+    return [
+        'Link your existing Serrale account from the website to unlock saved jobs and a synced Telegram profile.',
+        '',
+        'Open Serrale, use the Telegram connect flow, then come back with the secure link token.',
+    ].join('\n');
+}
+
+export function formatSavedJobsLocked() {
+    return [
+        'Saving jobs is available after linking your Serrale account.',
+        '',
+        'You can still browse and open jobs right now.',
     ].join('\n');
 }
 
 export function formatChannelCaption(job: JobSummary) {
     return [
-        `Serrale Job: ${job.title}`,
+        job.title,
+        `${job.job_type || 'Project'} · ${job.city || job.location_type || 'Remote/Open'}`,
+        `${formatBudget(job)} · ${job.experience_level || 'Open level'}`,
+        (job.description || 'Open Serrale for the full job brief.').slice(0, 140),
         '',
-        `Category: ${job.category || 'General'}`,
-        `Location: ${job.city || job.location_type || 'Remote/Open'}`,
-        `Budget: ${formatBudget(job)}`,
-        '',
-        (job.description || 'Open the full job on Serrale for the complete brief.').slice(0, 350),
-        '',
-        'Tap Apply in Bot. Serrale will confirm identity in private chat before you continue.',
+        'Tap View Details to open the compact Serrale job flow on Telegram.',
     ].join('\n');
 }
 
@@ -218,10 +261,9 @@ export function formatChannelClosedCaption(job: JobSummary) {
     return [
         `Closed on Serrale: ${job.title}`,
         '',
-        `Category: ${job.category || 'General'}`,
-        `Location: ${job.city || job.location_type || 'Remote/Open'}`,
-        `Budget: ${formatBudget(job)}`,
+        `${job.job_type || 'Project'} · ${job.city || job.location_type || 'Remote/Open'}`,
+        `${formatBudget(job)} · ${job.experience_level || 'Open level'}`,
         '',
-        'This opening is no longer accepting new proposals.',
+        'This opening is no longer accepting new applications.',
     ].join('\n');
 }

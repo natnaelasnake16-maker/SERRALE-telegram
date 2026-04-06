@@ -163,6 +163,39 @@ ALTER TABLE public.telegram_link_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.telegram_channel_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.telegram_session_state ENABLE ROW LEVEL SECURITY;
 
+CREATE TABLE IF NOT EXISTS public.telegram_job_applications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id uuid NOT NULL REFERENCES public.jobs(id) ON DELETE CASCADE,
+  telegram_user_id text NOT NULL REFERENCES public.telegram_users(telegram_user_id) ON DELETE CASCADE,
+  profile_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  full_name text NOT NULL,
+  phone text NOT NULL,
+  email text,
+  cv_file_url text,
+  cv_file_name text,
+  note text,
+  status text NOT NULL DEFAULT 'submitted',
+  source text NOT NULL DEFAULT 'telegram_bot',
+  submitted_at timestamptz NOT NULL DEFAULT now(),
+  promoted_to_proposal_id uuid REFERENCES public.proposals(id) ON DELETE SET NULL,
+  raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT telegram_job_applications_status_check CHECK (status IN ('submitted', 'reviewed', 'promoted')),
+  CONSTRAINT telegram_job_applications_source_check CHECK (source = 'telegram_bot')
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_job_applications_unique_user_job
+  ON public.telegram_job_applications(job_id, telegram_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_job_applications_job_id
+  ON public.telegram_job_applications(job_id, submitted_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_job_applications_telegram_user_id
+  ON public.telegram_job_applications(telegram_user_id, submitted_at DESC);
+
+ALTER TABLE public.telegram_job_applications ENABLE ROW LEVEL SECURITY;
+
 DROP POLICY IF EXISTS "Users can view own telegram linkage" ON public.telegram_users;
 CREATE POLICY "Users can view own telegram linkage"
   ON public.telegram_users
@@ -175,6 +208,12 @@ CREATE POLICY "Users can update own telegram linkage"
   FOR UPDATE
   USING (auth.uid() = profile_id)
   WITH CHECK (auth.uid() = profile_id);
+
+DROP POLICY IF EXISTS "Users can view own telegram applications" ON public.telegram_job_applications;
+CREATE POLICY "Users can view own telegram applications"
+  ON public.telegram_job_applications
+  FOR SELECT
+  USING (auth.uid() = profile_id);
 
 CREATE OR REPLACE VIEW public.telegram_publishable_jobs_v1 AS
 SELECT

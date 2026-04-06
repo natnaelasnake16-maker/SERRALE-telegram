@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Serrale Mini App</title>
+    <link rel="stylesheet" href="/mini-app/styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="shell">
+        <section class="screen is-active" id="loading-screen">
+            <div class="loading-mark"></div>
+            <p class="eyebrow">Serrale</p>
+            <h1>Preparing your job flow</h1>
+            <p class="muted">Validating Telegram launch, syncing your status, and loading the compact job card.</p>
+        </section>
+
+        <section class="screen" id="job-screen">
+            <div class="top-bar">
+                <button class="ghost-button" id="job-back-button" type="button">Back</button>
+                <button class="ghost-button" id="job-status-button" type="button">Status</button>
+            </div>
+
+            <div class="premium-card">
+                <div class="meta-row">
+                    <span class="eyebrow" id="job-posted"></span>
+                    <span class="chip chip-soft" id="job-client-chip">Client</span>
+                </div>
+                <h1 id="job-title"></h1>
+                <p class="subtle" id="job-category"></p>
+
+                <div class="summary-grid">
+                    <div>
+                        <span class="summary-label">Location</span>
+                        <strong id="job-location"></strong>
+                    </div>
+                    <div>
+                        <span class="summary-label">Budget</span>
+                        <strong id="job-budget"></strong>
+                    </div>
+                    <div>
+                        <span class="summary-label">Type</span>
+                        <strong id="job-type"></strong>
+                    </div>
+                    <div>
+                        <span class="summary-label">Experience</span>
+                        <strong id="job-experience"></strong>
+                    </div>
+                </div>
+
+                <div class="summary-grid compact-grid">
+                    <div>
+                        <span class="summary-label">Deadline</span>
+                        <strong id="job-deadline"></strong>
+                    </div>
+                    <div>
+                        <span class="summary-label">Gender / Education</span>
+                        <strong id="job-eligibility"></strong>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <p class="section-label">Skills</p>
+                    <div class="chips" id="job-skills"></div>
+                </div>
+
+                <div class="section">
+                    <p class="section-label">Description</p>
+                    <p class="body-copy" id="job-description"></p>
+                </div>
+
+                <div class="inline-actions">
+                    <button class="secondary-button" id="save-button" type="button">Save</button>
+                    <button class="secondary-button" id="share-button" type="button">Share</button>
+                    <button class="secondary-button" id="open-web-button" type="button">Open on Serrale</button>
+                </div>
+            </div>
+
+            <div class="sticky-action">
+                <button class="primary-button" id="apply-open-button" type="button">Apply</button>
+            </div>
+        </section>
+
+        <section class="screen" id="apply-screen">
+            <div class="top-bar">
+                <button class="ghost-button" id="apply-back-button" type="button">Back</button>
+                <span class="eyebrow">Telegram Apply</span>
+            </div>
+
+            <div class="premium-card">
+                <h2>Submit a lightweight Serrale application</h2>
+                <p class="muted">Keep it direct. Share your contact details, CV, and a short note.</p>
+
+                <form id="apply-form" class="form-stack">
+                    <label class="form-field">
+                        <span>Full name</span>
+                        <input id="apply-full-name" name="full_name" type="text" autocomplete="name" required />
+                    </label>
+
+                    <label class="form-field">
+                        <span>Phone</span>
+                        <input id="apply-phone" name="phone" type="tel" autocomplete="tel" required />
+                    </label>
+
+                    <label class="form-field">
+                        <span>Email</span>
+                        <input id="apply-email" name="email" type="email" autocomplete="email" />
+                    </label>
+
+                    <div class="form-field">
+                        <span>CV upload</span>
+                        <input id="cv-file-input" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                        <div class="upload-state" id="upload-state">No file uploaded yet.</div>
+                    </div>
+
+                    <label class="form-field">
+                        <span>Short note</span>
+                        <textarea id="apply-note" name="note" rows="4" placeholder="A concise note about fit, availability, or the best way to reach you."></textarea>
+                    </label>
+
+                    <label class="checkbox-row">
+                        <input id="apply-consent" name="consent" type="checkbox" required />
+                        <span>I confirm this information is accurate and can be shared with Serrale for this application.</span>
+                    </label>
+
+                    <button class="primary-button" id="submit-application-button" type="submit">Submit application</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="screen" id="status-screen">
+            <div class="top-bar">
+                <button class="ghost-button" id="status-back-button" type="button">Back</button>
+                <span class="eyebrow">Profile Status</span>
+            </div>
+
+            <div class="premium-card">
+                <h2>Your Serrale status</h2>
+                <div class="status-list">
+                    <div><span>Linked</span><strong id="status-linked"></strong></div>
+                    <div><span>Role</span><strong id="status-role"></strong></div>
+                    <div><span>Verification</span><strong id="status-verification"></strong></div>
+                    <div><span>Saved jobs</span><strong id="status-saved"></strong></div>
+                    <div><span>Applications</span><strong id="status-applications"></strong></div>
+                </div>
+
+                <div class="section">
+                    <p class="section-label">Next step</p>
+                    <p class="body-copy" id="status-next-step"></p>
+                </div>
+
+                <div class="inline-actions">
+                    <button class="secondary-button" id="status-link-button" type="button">Link or complete profile</button>
+                    <button class="secondary-button" id="status-open-serrale-button" type="button">Open Serrale</button>
+                </div>
+            </div>
+        </section>
+
+        <div class="toast" id="toast"></div>
+    </div>
+
+    <script src="/mini-app/app.js"></script>
+</body>
+</html>

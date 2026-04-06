@@ -1,9 +1,11 @@
 import { Markup } from 'telegraf';
 import { config } from '../config';
 import type {
+    JobFilterKey,
     JobSummary,
     PublishableJob,
     TelegramCategoryOption,
+    TelegramBotState,
     TelegramProfileRole,
 } from '../types';
 
@@ -15,44 +17,135 @@ function profileUrlForRole(role: TelegramProfileRole | 'admin' | null) {
     return `${config.serraleWebUrl}/profile/provider`;
 }
 
-export function mainMenuKeyboard(options: { linked: boolean; isAdmin: boolean; role?: TelegramProfileRole | 'admin' | null }) {
+function botStartUrl(payload?: string) {
+    return `https://t.me/${config.telegramBotUsername}${payload ? `?start=${encodeURIComponent(payload)}` : ''}`;
+}
+
+function miniAppUrl(options?: { jobId?: string; view?: 'job' | 'apply' | 'status' }) {
+    const params = new URLSearchParams();
+    if (options?.jobId) params.set('jobId', options.jobId);
+    params.set('view', options?.view || 'job');
+    return `${config.telegramAppUrl}/mini-app?${params.toString()}`;
+}
+
+export function mainMenuKeyboard(options: {
+    linked: boolean;
+    isAdmin: boolean;
+    role?: TelegramProfileRole | 'admin' | null;
+    state?: TelegramBotState;
+}) {
     const rows: any[][] = [];
 
-    if (options.linked && options.role === 'client') {
+    if (!options.linked && options.state === 'intake') {
         rows.push([
-            Markup.button.url('Complete Profile', profileUrlForRole('client')),
-            Markup.button.callback('My Status', 'menu:status'),
+            Markup.button.callback('Continue Onboarding', 'intake:continue'),
+            Markup.button.callback('Browse Jobs', 'menu:jobs'),
         ]);
-    } else if (options.linked) {
+        rows.push([
+            Markup.button.callback('My Status', 'menu:status'),
+            Markup.button.callback('Help', 'menu:help'),
+        ]);
+    } else if (!options.linked) {
         rows.push([
             Markup.button.callback('Browse Jobs', 'menu:jobs'),
+            Markup.button.callback('Start Onboarding', 'intake:start'),
+        ]);
+        rows.push([
+            Markup.button.callback('My Status', 'menu:status'),
+            Markup.button.callback('Link Existing Serrale Account', 'link:start'),
+        ]);
+        rows.push([Markup.button.callback('Help', 'menu:help')]);
+    } else if (options.role === 'client') {
+        rows.push([
+            Markup.button.url('Post on Serrale', `${config.serraleWebUrl}/post-job`),
+            Markup.button.url('Browse Providers later', `${config.serraleWebUrl}/browse-talent`),
+        ]);
+        rows.push([
+            Markup.button.webApp('Open Mini App', miniAppUrl({ view: 'status' })),
             Markup.button.callback('My Status', 'menu:status'),
         ]);
+        rows.push([Markup.button.callback('Help', 'menu:help')]);
     } else {
         rows.push([
-            Markup.button.callback('Verify Identity', 'menu:onboard'),
+            Markup.button.callback('Recommended Jobs', 'menu:recommended'),
+            Markup.button.callback('Browse Jobs', 'menu:jobs'),
+        ]);
+        rows.push([
+            Markup.button.callback('Saved Jobs', 'menu:saved'),
             Markup.button.callback('My Status', 'menu:status'),
+        ]);
+        rows.push([
+            Markup.button.webApp('Open Mini App', miniAppUrl({ view: 'status' })),
+            Markup.button.callback('Help', 'menu:help'),
         ]);
     }
 
-    rows.push([
-        Markup.button.url('Open Serrale App', config.serraleWebUrl),
-        Markup.button.callback('Help', 'menu:help'),
-    ]);
-
     if (options.isAdmin) {
-        rows.push([Markup.button.callback('Admin Queue', 'admin:jobs:1')]);
+        rows.push([
+            Markup.button.callback('Publish Queue', 'admin:listjobs'),
+            Markup.button.callback('Bot Status', 'menu:status'),
+        ]);
     }
 
     return Markup.inlineKeyboard(rows);
 }
 
-export function jobsListKeyboard(jobs: JobSummary[], page: number, hasNextPage: boolean) {
-    const rows: any[][] = jobs.map((job) => [
-        Markup.button.callback(`Open ${job.title.slice(0, 36)}`, `job:view:${job.id}:${page}`),
-    ]);
-    const pager: any[] = [];
+export function jobsFilterKeyboard(active: JobFilterKey) {
+    const filters: Array<{ label: string; value: JobFilterKey }> = [
+        { label: 'All', value: 'all' },
+        { label: 'Nearby', value: 'nearby' },
+        { label: 'Remote', value: 'remote' },
+        { label: 'Recent', value: 'recent' },
+        { label: 'My Category', value: 'my_category' },
+    ];
 
+    return Markup.inlineKeyboard([
+        filters.map((filter) =>
+            Markup.button.callback(
+                filter.value === active ? `• ${filter.label}` : filter.label,
+                `jobs:filter:${filter.value}`
+            )
+        ),
+    ]);
+}
+
+export function jobsListKeyboard(
+    jobs: JobSummary[],
+    page: number,
+    hasNextPage: boolean,
+    options?: { linked?: boolean; filter?: JobFilterKey }
+) {
+    const rows: any[][] = [];
+
+    if (options?.filter) {
+        rows.push(
+            [
+                { label: 'All', value: 'all' },
+                { label: 'Nearby', value: 'nearby' },
+                { label: 'Remote', value: 'remote' },
+                { label: 'Recent', value: 'recent' },
+                { label: 'My Category', value: 'my_category' },
+            ].map((filter) =>
+                Markup.button.callback(
+                    filter.value === options.filter ? `• ${filter.label}` : filter.label,
+                    `jobs:filter:${filter.value}`
+                )
+            )
+        );
+    }
+
+    jobs.forEach((job) => {
+        rows.push([
+            Markup.button.callback('View', `job:view:${job.id}`),
+            Markup.button.callback('Apply', `job:apply:${job.id}`),
+            Markup.button.callback(
+                job.saved ? 'Unsave' : 'Save',
+                `${job.saved ? 'job:unsave' : 'job:save'}:${job.id}:${page}`
+            ),
+        ]);
+    });
+
+    const pager: any[] = [];
     if (page > 1) pager.push(Markup.button.callback('Prev', `jobs:page:${page - 1}`));
     if (hasNextPage) pager.push(Markup.button.callback('Next', `jobs:page:${page + 1}`));
     if (pager.length > 0) rows.push(pager);
@@ -64,19 +157,21 @@ export function jobsListKeyboard(jobs: JobSummary[], page: number, hasNextPage: 
 export function jobDetailKeyboard(options: { jobId: string; page: number; linked: boolean; saved: boolean }) {
     const rows: any[][] = [
         [
-            Markup.button.url('Apply on Web', `${config.serraleWebUrl}/job/${options.jobId}`),
-            Markup.button.url('Open Serrale App', `${config.serraleWebUrl}/job/${options.jobId}`),
+            Markup.button.webApp('View Details', miniAppUrl({ jobId: options.jobId, view: 'job' })),
+            Markup.button.webApp('Apply', miniAppUrl({ jobId: options.jobId, view: 'apply' })),
+        ],
+        [
+            Markup.button.url('Open on Serrale', `${config.serraleWebUrl}/job/${options.jobId}`),
+            Markup.button.callback('Share', `job:share:${options.jobId}`),
         ],
     ];
 
-    if (options.linked) {
-        rows.push([
-            Markup.button.callback(
-                options.saved ? 'Remove Saved Job' : 'Save Job',
-                `${options.saved ? 'job:unsave' : 'job:save'}:${options.jobId}:${options.page}`
-            ),
-        ]);
-    }
+    rows.push([
+        Markup.button.callback(
+            options.saved ? 'Unsave' : options.linked ? 'Save' : 'Link to Save',
+            options.linked ? `${options.saved ? 'job:unsave' : 'job:save'}:${options.jobId}:${options.page}` : 'link:start'
+        ),
+    ]);
 
     rows.push([
         Markup.button.callback('Back to Jobs', `jobs:page:${options.page}`),
@@ -84,6 +179,22 @@ export function jobDetailKeyboard(options: { jobId: string; page: number; linked
     ]);
 
     return Markup.inlineKeyboard(rows);
+}
+
+export function jobStartKeyboard(options: { jobId: string; linked: boolean; saved: boolean }) {
+    return Markup.inlineKeyboard([
+        [
+            Markup.button.webApp('View Details', miniAppUrl({ jobId: options.jobId, view: 'job' })),
+            Markup.button.webApp('Apply', miniAppUrl({ jobId: options.jobId, view: 'apply' })),
+        ],
+        [
+            Markup.button.callback(
+                options.linked ? (options.saved ? 'Unsave' : 'Save') : 'Link to Save',
+                options.linked ? `${options.saved ? 'job:unsave' : 'job:save'}:${options.jobId}:1` : 'link:start'
+            ),
+            Markup.button.url('Open on Serrale', `${config.serraleWebUrl}/job/${options.jobId}`),
+        ],
+    ]);
 }
 
 export function onboardingCityKeyboard() {
@@ -136,7 +247,7 @@ export function onboardingCategoryKeyboard() {
 export function identityCompletedKeyboard(role: TelegramProfileRole | 'admin' | null) {
     const rows: any[][] = [
         [
-            Markup.button.url('Open Serrale App', config.serraleWebUrl),
+            Markup.button.webApp('Open Mini App', miniAppUrl({ view: 'status' })),
             Markup.button.url('Complete Profile', profileUrlForRole(role)),
         ],
     ];
@@ -150,7 +261,8 @@ export function identityCompletedKeyboard(role: TelegramProfileRole | 'admin' | 
 
 export function adminJobsKeyboard(jobs: PublishableJob[], page: number, hasNextPage: boolean) {
     const rows: any[][] = jobs.map((job) => [
-        Markup.button.callback(`Post ${job.title.slice(0, 30)}`, `admin:publish:${job.id}`),
+        Markup.button.callback(`Post ${job.title.slice(0, 26)}`, `admin:publish:${job.id}`),
+        Markup.button.webApp('Preview', miniAppUrl({ jobId: job.id, view: 'job' })),
     ]);
     const pager: any[] = [];
 
@@ -165,7 +277,7 @@ export function adminJobsKeyboard(jobs: PublishableJob[], page: number, hasNextP
 export function adminPublishedJobKeyboard(jobId: string) {
     return Markup.inlineKeyboard([
         [Markup.button.callback('Close Job', `admin:close:${jobId}`)],
-        [Markup.button.callback('Admin Queue', 'admin:jobs:1')],
+        [Markup.button.callback('Publish Queue', 'admin:listjobs')],
     ]);
 }
 
@@ -173,12 +285,11 @@ export function channelPostKeyboard(jobId: string, options?: { closed?: boolean 
     return Markup.inlineKeyboard([
         [
             Markup.button.url(
-                options?.closed ? 'Open on Serrale' : 'Apply in Bot',
-                options?.closed
-                    ? `${config.serraleWebUrl}/job/${jobId}`
-                    : `https://t.me/${config.telegramBotUsername}?start=apply_${jobId}`
+                'View Details',
+                options?.closed ? `${config.serraleWebUrl}/job/${jobId}` : botStartUrl(`job_${jobId}`)
             ),
-            Markup.button.url('Open Serrale App', `${config.serraleWebUrl}/job/${jobId}`),
+            Markup.button.url('Open on Serrale', `${config.serraleWebUrl}/job/${jobId}`),
+            Markup.button.url('Start Bot', botStartUrl(options?.closed ? undefined : `job_${jobId}`)),
         ],
     ]);
 }

@@ -13,7 +13,7 @@ describe('keyboards', () => {
     it('shows admin queue button for admins', () => {
         const keyboard = mainMenuKeyboard({ linked: true, isAdmin: true });
         const labels = keyboard.reply_markup.inline_keyboard.flat().map((button: any) => button.text);
-        expect(labels).toContain('Admin Queue');
+        expect(labels).toContain('Publish Queue');
         expect(labels).toContain('Browse Jobs');
     });
 
@@ -27,7 +27,7 @@ describe('keyboards', () => {
     it('uses the private bot apply deep link in the channel keyboard', () => {
         const keyboard = channelPostKeyboard('job-1');
         const firstRow = keyboard.reply_markup.inline_keyboard[0];
-        expect(firstRow[0].text).toBe('Apply in Bot');
-        expect(firstRow[0].url).toContain('https://t.me/serrale_test_bot?start=apply_job-1');
+        expect(firstRow[0].text).toBe('View Details');
+        expect(firstRow[0].url).toContain('https://t.me/serrale_test_bot?start=job_job-1');
     });
 });

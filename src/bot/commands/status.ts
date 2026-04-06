@@ -10,6 +10,9 @@ export function registerStatusCommand(bot: Telegraf<SerraleBotContext>) {
         const telegramUserId = String(ctx.from?.id || '');
         const status = await UserService.getLinkStatus(telegramUserId);
         const isAdmin = await hasAdminAccess(telegramUserId);
-        await ctx.reply(formatStatusMessage(status), mainMenuKeyboard({ linked: status.linked, isAdmin, role: status.role }));
+        await ctx.reply(
+            formatStatusMessage(status),
+            mainMenuKeyboard({ linked: status.linked, isAdmin, role: status.role, state: status.state })
+        );
     });
 }

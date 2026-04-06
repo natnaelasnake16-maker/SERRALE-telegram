@@ -2,12 +2,15 @@ import { Telegraf } from 'telegraf';
 import { config } from '../config';
 import type { SerraleBotContext } from '../types';
 import { JobService } from '../services/job.service';
+import { RecommendationService } from '../services/recommendation.service';
 import { UserService } from '../services/user.service';
 import { formatClientWebHandoff, formatHelpMessage, formatJobList } from '../utils/formatters';
 import { jobsListKeyboard, mainMenuKeyboard } from '../utils/keyboards';
 import { logger } from '../utils/logger';
 import { registerAdminCommands } from './commands/admin';
 import { registerHelpCommand } from './commands/help';
+import { registerJobsCommand } from './commands/jobs';
+import { registerSavedCommand } from './commands/saved';
 import { registerStartCommand } from './commands/start';
 import { registerStatusCommand } from './commands/status';
 import { errorHandler, hasAdminAccess, trackUser } from './middleware/auth';
@@ -22,6 +25,8 @@ export function createBot() {
 
     registerStartCommand(bot);
     registerStatusCommand(bot);
+    registerJobsCommand(bot);
+    registerSavedCommand(bot);
     registerHelpCommand(bot);
     registerAdminCommands(bot);
     registerCallbackHandler(bot);
@@ -30,16 +35,26 @@ export function createBot() {
         const query = ctx.match[1]?.trim() || '';
         const status = await UserService.getLinkStatus(String(ctx.from?.id || ''));
         if (!status.profile_id) {
-            await beginOnboarding(ctx);
+            const result = await JobService.listOpenJobs({ page: 1, query, status });
+            await ctx.reply(
+                formatJobList(result.jobs, 1, query, 'Search'),
+                jobsListKeyboard(result.jobs, 1, result.hasNextPage, { linked: false, filter: 'all' })
+            );
             return;
         }
         if (status.role === 'client') {
             const isAdmin = await hasAdminAccess(String(ctx.from?.id || ''));
-            await ctx.reply(formatClientWebHandoff(), mainMenuKeyboard({ linked: status.linked, isAdmin, role: status.role }));
+            await ctx.reply(
+                formatClientWebHandoff(),
+                mainMenuKeyboard({ linked: status.linked, isAdmin, role: status.role, state: status.state })
+            );
             return;
         }
-        const result = await JobService.listOpenJobs({ page: 1, query, profileId: status.profile_id });
-        await ctx.reply(formatJobList(result.jobs, 1, query), jobsListKeyboard(result.jobs, 1, result.hasNextPage));
+        const result = await JobService.listOpenJobs({ page: 1, query, profileId: status.profile_id, status });
+        await ctx.reply(
+            formatJobList(result.jobs, 1, query, 'Search'),
+            jobsListKeyboard(result.jobs, 1, result.hasNextPage, { linked: true, filter: 'all' })
+        );
     });
 
     bot.on('text', async (ctx) => {
@@ -56,12 +71,20 @@ export function createBot() {
         const status = await UserService.getLinkStatus(telegramUserId);
         const isAdmin = await hasAdminAccess(telegramUserId);
         if (!status.profile_id) {
-            await beginOnboarding(ctx);
+            await ctx.reply(
+                `${formatHelpMessage()}\n\nUse /jobs to browse or tap Start Onboarding if you want a fuller Serrale profile in Telegram.`,
+                mainMenuKeyboard({ linked: status.linked, isAdmin, role: status.role, state: status.state })
+            );
+            return;
+        }
+        if (message.toLowerCase() === 'recommended') {
+            const jobs = await RecommendationService.listRecommendedJobs(status);
+            await ctx.reply(formatJobList(jobs, 1, undefined, 'Recommended'), jobsListKeyboard(jobs, 1, false, { linked: true }));
             return;
         }
         await ctx.reply(
             `${formatHelpMessage()}\n\nUse the menu if you want the guided flow instead of free text.`,
-            mainMenuKeyboard({ linked: status.linked, isAdmin, role: status.role })
+            mainMenuKeyboard({ linked: status.linked, isAdmin, role: status.role, state: status.state })
         );
     });
 

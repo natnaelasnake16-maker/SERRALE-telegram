@@ -1,9 +1,31 @@
-import type { JobSummary, PublishableJob } from '../types';
+import type { JobFilterKey, JobSummary, PublishableJob, TelegramLinkStatus } from '../types';
 import { supabase } from './supabase';
 
 const PAGE_SIZE = 5;
 
+function asStringList(value: unknown) {
+    if (Array.isArray(value)) {
+        return value
+            .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+            .filter(Boolean);
+    }
+
+    return [];
+}
+
 function asJobSummary(row: Record<string, any>, saved = false): JobSummary {
+    const relatedSkills = Array.isArray(row.job_skills)
+        ? row.job_skills
+              .map((item: any) => {
+                  if (typeof item?.skills?.name === 'string') return item.skills.name.trim();
+                  if (typeof item?.name === 'string') return item.name.trim();
+                  return '';
+              })
+              .filter(Boolean)
+        : [];
+
+    const inlineSkills = asStringList(row.skills);
+
     return {
         id: String(row.id),
         title: String(row.title || 'Untitled job'),
@@ -20,22 +42,81 @@ function asJobSummary(row: Record<string, any>, saved = false): JobSummary {
         experience_level: row.experience_level ? String(row.experience_level) : null,
         saved,
         created_at: row.created_at ? String(row.created_at) : undefined,
+        deadline: row.deadline ? String(row.deadline) : null,
+        gender: row.gender ? String(row.gender) : null,
+        education_level: row.education_level ? String(row.education_level) : null,
+        client_name: row.client?.full_name ? String(row.client.full_name) : null,
+        client_verified: Boolean(row.client?.verified_identity),
+        skills: Array.from(new Set([...relatedSkills, ...inlineSkills])).slice(0, 12),
+        sub_category: row.sub_category ? String(row.sub_category) : null,
     };
 }
 
 export class JobService {
-    static async listOpenJobs(options: { page?: number; pageSize?: number; query?: string; profileId?: string | null }) {
+    static async listOpenJobs(options: {
+        page?: number;
+        pageSize?: number;
+        query?: string;
+        profileId?: string | null;
+        filter?: JobFilterKey;
+        status?: Pick<TelegramLinkStatus, 'city' | 'main_skill_category'> | null;
+    }) {
         const page = Math.max(1, options.page || 1);
         const pageSize = Math.max(1, options.pageSize || PAGE_SIZE);
         const from = (page - 1) * pageSize;
         const to = from + pageSize;
+        const filter = options.filter || 'all';
+
+        let savedIdsForFilter: string[] | null = null;
+        if (filter === 'saved') {
+            if (!options.profileId) {
+                return {
+                    jobs: [],
+                    page,
+                    hasNextPage: false,
+                };
+            }
+
+            const { data: savedRows, error: savedRowsError } = await supabase
+                .from('saved_jobs')
+                .select('job_id')
+                .eq('profile_id', options.profileId);
+
+            if (savedRowsError) throw new Error(savedRowsError.message);
+
+            savedIdsForFilter = (savedRows || []).map((row) => String(row.job_id));
+            if (savedIdsForFilter.length === 0) {
+                return {
+                    jobs: [],
+                    page,
+                    hasNextPage: false,
+                };
+            }
+        }
 
         let queryBuilder = supabase
             .from('jobs')
-            .select('id, title, category, city, budget, budget_min, budget_max, job_type, duration, location_type, status, description, experience_level, created_at')
-            .eq('status', 'open')
-            .order('created_at', { ascending: false })
-            .range(from, to);
+            .select(
+                'id, title, category, sub_category, city, budget, budget_min, budget_max, job_type, duration, location_type, status, description, experience_level, created_at, deadline, gender, education_level, skills, client:profiles!client_id(full_name, verified_identity), job_skills(skills(name))'
+            )
+            .eq('status', 'open');
+
+        if (filter === 'remote') {
+            queryBuilder = queryBuilder.eq('location_type', 'remote');
+        }
+
+        if (filter === 'nearby' && options.status?.city) {
+            queryBuilder = queryBuilder.eq('city', options.status.city);
+        }
+
+        if (filter === 'my_category' && options.status?.main_skill_category) {
+            const category = options.status.main_skill_category.replace(/,/g, '');
+            queryBuilder = queryBuilder.or(`category.eq.${category},sub_category.eq.${category}`);
+        }
+
+        if (savedIdsForFilter) {
+            queryBuilder = queryBuilder.in('id', savedIdsForFilter);
+        }
 
         if (options.query) {
             const term = options.query.trim();
@@ -43,6 +124,8 @@ export class JobService {
                 queryBuilder = queryBuilder.or(`title.ilike.%${term}%,description.ilike.%${term}%,category.ilike.%${term}%`);
             }
         }
+
+        queryBuilder = queryBuilder.order('created_at', { ascending: false }).range(from, to);
 
         const { data, error } = await queryBuilder;
         if (error) throw new Error(error.message);
@@ -69,10 +152,21 @@ export class JobService {
         };
     }
 
+    static async listSavedJobs(profileId: string, page = 1, pageSize = PAGE_SIZE) {
+        return this.listOpenJobs({
+            page,
+            pageSize,
+            profileId,
+            filter: 'saved',
+        });
+    }
+
     static async getJobById(jobId: string, profileId?: string | null) {
         const { data, error } = await supabase
             .from('jobs')
-            .select('id, title, category, city, budget, budget_min, budget_max, job_type, duration, location_type, status, description, experience_level, created_at')
+            .select(
+                'id, title, category, sub_category, city, budget, budget_min, budget_max, job_type, duration, location_type, status, description, experience_level, created_at, deadline, gender, education_level, skills, client:profiles!client_id(full_name, verified_identity), job_skills(skills(name))'
+            )
             .eq('id', jobId)
             .maybeSingle();
 
@@ -147,7 +241,9 @@ export class JobService {
                 updated_at: new Date().toISOString(),
             })
             .eq('id', jobId)
-            .select('id, title, category, city, budget, budget_min, budget_max, job_type, duration, location_type, status, description, experience_level, created_at')
+            .select(
+                'id, title, category, sub_category, city, budget, budget_min, budget_max, job_type, duration, location_type, status, description, experience_level, created_at, deadline, gender, education_level, skills, client:profiles!client_id(full_name, verified_identity), job_skills(skills(name))'
+            )
             .single();
 
         if (error) throw new Error(error.message);

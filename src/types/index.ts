@@ -1,4 +1,14 @@
 import type { Context } from 'telegraf';
+import type {
+    TelegramApplicationCreateInput,
+    TelegramApplicationStats,
+    TelegramJobApplicationRecord,
+    UploadedTelegramDocument,
+} from './applications';
+import type { JobFilterKey } from './callbacks';
+export type { TelegramApplicationCreateInput, TelegramApplicationStats, TelegramJobApplicationRecord, UploadedTelegramDocument } from './applications';
+export type { JobFilterKey } from './callbacks';
+export { JOB_FILTER_KEYS, isJobFilterKey } from './callbacks';
 
 export const ONBOARDING_STEPS = ['full_name', 'city', 'city_other', 'role', 'category'] as const;
 export const TELEGRAM_CITY_OPTIONS = ['Addis Ababa', 'Dire Dawa', 'Hawassa', 'Other'] as const;
@@ -20,6 +30,7 @@ export type ChannelPostStatus = 'posted' | 'closed';
 export type TelegramRegistrationSource = 'telegram_bot';
 export type TelegramProfileRole = 'service_provider' | 'client';
 export type TelegramTrustLevel = 'level_1' | 'level_2' | 'level_3';
+export type TelegramBotState = 'unknown' | 'intake' | 'linked_provider' | 'linked_client';
 
 export interface TelegramUserRecord {
     id?: string;
@@ -45,11 +56,17 @@ export interface TelegramLinkStatus {
     saved_jobs_count: number;
     intake_id: string | null;
     full_name: string | null;
+    phone: string | null;
+    email: string | null;
     city: string | null;
     main_skill_category: string | null;
     user_level: string | null;
     profile_completion: number;
     trust_level: TelegramTrustLevel | null;
+    application_count: number;
+    last_application_at: string | null;
+    state: TelegramBotState;
+    is_admin: boolean;
 }
 
 export interface JobSummary {
@@ -68,6 +85,13 @@ export interface JobSummary {
     experience_level?: string | null;
     saved?: boolean;
     created_at?: string;
+    deadline?: string | null;
+    gender?: string | null;
+    education_level?: string | null;
+    skills?: string[];
+    client_name?: string | null;
+    client_verified?: boolean;
+    sub_category?: string | null;
 }
 
 export interface PublishableJob extends JobSummary {
@@ -92,17 +116,48 @@ export interface OnboardingDraft {
 }
 
 export type CallbackAction =
-    | `menu:${'home' | 'jobs' | 'status' | 'onboard' | 'help'}`
+    | `menu:${'home' | 'jobs' | 'status' | 'onboard' | 'help' | 'saved' | 'recommended'}`
     | `jobs:page:${number}`
-    | `job:view:${string}:${number}`
+    | `jobs:filter:${JobFilterKey}`
+    | `job:view:${string}`
+    | `job:apply:${string}`
+    | `job:share:${string}`
     | `job:save:${string}:${number}`
     | `job:unsave:${string}:${number}`
     | `onboard:city:${string}`
     | `onboard:role:${TelegramProfileRole}`
     | `onboard:category:${string}`
+    | 'link:start'
+    | 'intake:start'
+    | 'intake:continue'
+    | `miniapp:open:${string}`
     | `admin:jobs:${number}`
+    | 'admin:listjobs'
     | `admin:publish:${string}`
     | `admin:close:${string}`;
+
+export interface TelegramMiniAppBootstrap {
+    status: TelegramLinkStatus;
+    job: JobSummary | null;
+    can_save: boolean;
+    can_apply: boolean;
+    mini_app_url: string;
+    web_job_url: string | null;
+    applications: TelegramApplicationStats;
+}
+
+export interface TelegramMiniAppStatusResponse {
+    status: TelegramLinkStatus;
+    applications: TelegramJobApplicationRecord[];
+}
+
+export interface TelegramApplyResponse {
+    application: TelegramJobApplicationRecord;
+}
+
+export interface TelegramUploadResponse {
+    file: UploadedTelegramDocument;
+}
 
 export type SerraleBotContext = Context & {
     state: {

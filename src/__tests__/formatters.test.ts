@@ -28,7 +28,7 @@ describe('formatters', () => {
         );
 
         expect(result).toContain('https://serrale.com/job/job-1');
-        expect(result).toContain('Saved on Telegram: No');
+        expect(result).toContain('Saved: No');
     });
 
     it('formats the issued Serrale identity summary', () => {
@@ -41,11 +41,17 @@ describe('formatters', () => {
             saved_jobs_count: 0,
             intake_id: 'intake-1',
             full_name: 'Abel Bekele',
+            phone: '+251911000000',
+            email: 'abel@example.com',
             city: 'Addis Ababa',
             main_skill_category: 'Graphic Design',
             user_level: 'junior',
             profile_completion: 40,
             trust_level: 'level_1',
+            application_count: 0,
+            last_application_at: null,
+            state: 'linked_provider',
+            is_admin: false,
         });
 
         expect(result).toContain('SER-00847');

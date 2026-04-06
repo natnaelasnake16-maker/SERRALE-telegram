@@ -290,11 +290,17 @@ export class UserService {
                 saved_jobs_count: 0,
                 intake_id: null,
                 full_name: null,
+                phone: null,
+                email: null,
                 city: null,
                 main_skill_category: null,
                 user_level: null,
                 profile_completion: 0,
                 trust_level: null,
+                application_count: 0,
+                last_application_at: null,
+                state: 'unknown',
+                is_admin: false,
             };
         }
 
@@ -316,6 +322,14 @@ export class UserService {
             savedJobsCount = count || 0;
         }
 
+        const { data: applicationRows, error: applicationError } = await supabase
+            .from('telegram_job_applications')
+            .select('submitted_at')
+            .eq('telegram_user_id', telegramUserId)
+            .order('submitted_at', { ascending: false });
+
+        if (applicationError) throw new Error(applicationError.message);
+
         let intake: LooseRecord | null = null;
         if (telegramUser.current_intake_id) {
             intake = await getIntakeById(telegramUser.current_intake_id);
@@ -335,21 +349,35 @@ export class UserService {
         const fallbackName = cleanNullable(`${telegramUser.first_name || ''} ${telegramUser.last_name || ''}`);
         const city = cleanNullable(profile?.location_city || profile?.city || intake?.city);
         const role = cleanText(profile?.role).toLowerCase();
+        const isAdmin = role === 'admin';
+        const state = telegramUser.profile_id
+            ? role === 'client'
+                ? 'linked_client'
+                : 'linked_provider'
+            : telegramUser.current_intake_id
+              ? 'intake'
+              : 'unknown';
 
         return {
             linked: Boolean(telegramUser.profile_id),
-            role: role === 'admin' ? 'admin' : role === 'client' ? 'client' : role ? 'service_provider' : null,
+            role: isAdmin ? 'admin' : role === 'client' ? 'client' : role ? 'service_provider' : null,
             profile_id: telegramUser.profile_id,
             serrale_id: cleanNullable(profile?.serrale_id),
             intake_status: cleanNullable(intake?.intake_status),
             saved_jobs_count: savedJobsCount,
             intake_id: cleanNullable(intake?.id || telegramUser.current_intake_id),
             full_name: cleanNullable(profile?.full_name || profile?.name || intake?.full_name) || fallbackName,
+            phone: cleanNullable(profile?.phone || intake?.phone),
+            email: cleanNullable(profile?.email || intake?.email),
             city,
             main_skill_category: cleanNullable(profile?.main_skill_category || intake?.main_skill_category || profile?.category),
             user_level: cleanNullable(profile?.user_level || intake?.user_level),
             profile_completion: completionFromProfile(profile),
             trust_level: trustLevelFromProfile(profile),
+            application_count: (applicationRows || []).length,
+            last_application_at: applicationRows?.[0]?.submitted_at || null,
+            state,
+            is_admin: isAdmin,
         };
     }
 
